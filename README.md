@@ -141,4 +141,4 @@ Once configured, your AI assistant can:
 
 ## License
 
-MIT
+PolyForm Noncommercial 1.0.0 - free to use, modify, and share for non-commercial purposes.
