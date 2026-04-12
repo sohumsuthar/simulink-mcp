@@ -1,10 +1,6 @@
-"""
-Simulink MCP Tools - Model Management.
+"""Model lifecycle — load, close, create, save."""
 
-Provides tools for loading, closing, creating, and saving Simulink models.
-"""
-
-from app import mcp, matlab_eval, normalize_path
+from simulink_mcp.app import mcp, matlab_eval, escape_matlab, normalize_path
 
 
 @mcp.tool()
@@ -13,21 +9,18 @@ def load_model(model_path: str) -> str:
     try:
         path = normalize_path(model_path)
 
-        # Add model directory to MATLAB path
         dir_path = "/".join(path.split("/")[:-1])
         if dir_path:
-            matlab_eval(f"addpath('{dir_path}');")
+            matlab_eval(f"addpath('{escape_matlab(dir_path)}');")
 
-        # Load the model
-        matlab_eval(f"load_system('{path}');")
+        matlab_eval(f"load_system('{escape_matlab(path)}');")
 
-        # Extract model name (filename without extension)
         filename = path.split("/")[-1]
         model_name = filename.rsplit(".", 1)[0] if "." in filename else filename
 
-        # Get top-level blocks
-        result, stdout, stderr = matlab_eval(
-            f"strjoin(find_system('{model_name}', 'SearchDepth', 1), newline);",
+        result, _, _ = matlab_eval(
+            f"strjoin(find_system('{escape_matlab(model_name)}', "
+            f"'SearchDepth', 1), newline);",
             nargout=1,
         )
 
@@ -51,12 +44,13 @@ def load_model(model_path: str) -> str:
 def close_model(model_name: str, save: bool = False) -> str:
     """Close a loaded Simulink model, optionally saving it first."""
     try:
+        name = escape_matlab(model_name)
         if save:
-            matlab_eval(f"save_system('{model_name}');")
-            matlab_eval(f"close_system('{model_name}');")
+            matlab_eval(f"save_system('{name}');")
+            matlab_eval(f"close_system('{name}');")
             return f"Model '{model_name}' saved and closed."
         else:
-            matlab_eval(f"close_system('{model_name}', 0);")
+            matlab_eval(f"close_system('{name}', 0);")
             return f"Model '{model_name}' closed without saving."
 
     except Exception as e:
@@ -67,19 +61,17 @@ def close_model(model_name: str, save: bool = False) -> str:
 def create_model(model_name: str, model_path: str = "") -> str:
     """Create a new blank Simulink model and save it."""
     try:
-        # Create new blank model
-        matlab_eval(f"new_system('{model_name}');")
+        name = escape_matlab(model_name)
+        matlab_eval(f"new_system('{name}');")
 
-        # Save to specified path or current MATLAB directory
         if model_path:
             path = normalize_path(model_path)
-            # Ensure path includes filename
             if not path.endswith(".slx"):
                 path = f"{path}/{model_name}.slx"
-            matlab_eval(f"save_system('{model_name}', '{path}');")
+            matlab_eval(f"save_system('{name}', '{escape_matlab(path)}');")
             return f"Created and saved model '{model_name}' at {path}."
         else:
-            matlab_eval(f"save_system('{model_name}');")
+            matlab_eval(f"save_system('{name}');")
             return f"Created and saved model '{model_name}' in current MATLAB directory."
 
     except Exception as e:
@@ -90,12 +82,13 @@ def create_model(model_name: str, model_path: str = "") -> str:
 def save_model(model_name: str, file_path: str = "") -> str:
     """Save a currently loaded Simulink model, optionally to a specific path."""
     try:
+        name = escape_matlab(model_name)
         if file_path:
-            path = normalize_path(file_path)
-            matlab_eval(f"save_system('{model_name}', '{path}');")
-            return f"Model '{model_name}' saved to {path}."
+            path = escape_matlab(normalize_path(file_path))
+            matlab_eval(f"save_system('{name}', '{path}');")
+            return f"Model '{model_name}' saved to {file_path}."
         else:
-            matlab_eval(f"save_system('{model_name}');")
+            matlab_eval(f"save_system('{name}');")
             return f"Model '{model_name}' saved."
 
     except Exception as e:

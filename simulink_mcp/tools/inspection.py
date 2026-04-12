@@ -1,12 +1,8 @@
-"""
-Simulink MCP Server - Model Inspection Tools.
-
-Provides tools to list blocks, inspect block parameters, and read
-model-level simulation configuration.
-"""
+"""Model inspection — list blocks, read parameters, read configuration."""
 
 import io
-from app import mcp, matlab_eval, get_engine, normalize_path
+
+from simulink_mcp.app import mcp, matlab_eval, escape_matlab, get_engine
 
 
 @mcp.tool()
@@ -23,6 +19,7 @@ def list_blocks(model_name: str, search_depth: int = 2, block_type: str = "") ->
         out = io.StringIO()
         err = io.StringIO()
 
+        # find_system is called via feval (parameterized, no injection risk)
         if block_type:
             blocks = eng.find_system(
                 model_name, "SearchDepth", search_depth,
@@ -35,7 +32,6 @@ def list_blocks(model_name: str, search_depth: int = 2, block_type: str = "") ->
                 nargout=1, stdout=out, stderr=err,
             )
 
-        # find_system returns a MATLAB cell array → Python list of strings
         if not blocks:
             return f"No blocks found in '{model_name}' (depth={search_depth})."
 
@@ -67,17 +63,12 @@ def get_block_params(block_path: str) -> str:
     """
     try:
         eng = get_engine()
+        escaped = escape_matlab(block_path)
 
-        # Use fieldnames() in MATLAB to extract the parameter names from
-        # the DialogParameters struct, which avoids having to interpret
-        # the struct on the Python side.
-        escaped = block_path.replace("'", "''")
-        result, stdout, _ = matlab_eval(
+        matlab_eval(
             f"celldisp_out = fieldnames(get_param('{escaped}', 'DialogParameters'));",
-            nargout=0,
         )
 
-        # Retrieve the cell array of field names into Python
         param_names = eng.eval(
             "celldisp_out",
             nargout=1,
@@ -99,7 +90,6 @@ def get_block_params(block_path: str) -> str:
             except Exception as ex:
                 lines.append(f"  {name} = <error: {ex}>")
 
-        # Clean up temp variable
         eng.eval("clear celldisp_out;", nargout=0,
                  stdout=io.StringIO(), stderr=io.StringIO())
 

@@ -1,13 +1,8 @@
-"""
-Simulink MCP Tools - Model Modification.
-
-Provides tools for setting block/model parameters, adding and connecting
-blocks, and deleting blocks from Simulink models.
-"""
+"""Model modification — set parameters, add/connect/delete blocks."""
 
 import json
 
-from app import mcp, matlab_eval
+from simulink_mcp.app import mcp, matlab_eval, escape_matlab
 
 
 @mcp.tool()
@@ -20,7 +15,10 @@ def set_block_param(block_path: str, param_name: str, param_value: str) -> str:
         set_block_param("mymodel/Transfer Fcn", "Numerator", "[1 2]")
     """
     try:
-        matlab_eval(f"set_param('{block_path}', '{param_name}', '{param_value}');")
+        matlab_eval(
+            f"set_param('{escape_matlab(block_path)}', "
+            f"'{escape_matlab(param_name)}', '{escape_matlab(param_value)}');"
+        )
         return f"Set '{param_name}' = '{param_value}' on block '{block_path}'."
 
     except Exception as e:
@@ -42,21 +40,29 @@ def set_model_config(model_name: str, params: str) -> str:
     except json.JSONDecodeError as e:
         return f"Invalid JSON in params: {e}"
 
+    name = escape_matlab(model_name)
     set_params: list[str] = []
     errors: list[str] = []
 
     for key, value in param_dict.items():
         try:
-            matlab_eval(f"set_param('{model_name}', '{key}', '{value}');")
+            matlab_eval(
+                f"set_param('{name}', '{escape_matlab(key)}', '{escape_matlab(value)}');"
+            )
             set_params.append(f"  {key} = '{value}'")
         except Exception as e:
             errors.append(f"  {key}: {e}")
 
     parts: list[str] = []
     if set_params:
-        parts.append(f"Set {len(set_params)} parameter(s) on '{model_name}':\n" + "\n".join(set_params))
+        parts.append(
+            f"Set {len(set_params)} parameter(s) on '{model_name}':\n"
+            + "\n".join(set_params)
+        )
     if errors:
-        parts.append(f"Failed to set {len(errors)} parameter(s):\n" + "\n".join(errors))
+        parts.append(
+            f"Failed to set {len(errors)} parameter(s):\n" + "\n".join(errors)
+        )
 
     return "\n".join(parts) if parts else "No parameters provided."
 
@@ -77,7 +83,6 @@ def add_block(source: str, destination: str, params: str = "") -> str:
     on the newly added block.
     """
     try:
-        # Parse optional params
         param_dict: dict[str, str] = {}
         if params:
             try:
@@ -85,15 +90,16 @@ def add_block(source: str, destination: str, params: str = "") -> str:
             except json.JSONDecodeError as e:
                 return f"Invalid JSON in params: {e}"
 
-        # Build the add_block call
+        src = escape_matlab(source)
+        dst = escape_matlab(destination)
+
         if param_dict:
-            # add_block(src, dst, 'Key1', 'Val1', 'Key2', 'Val2', ...)
             param_args = ""
             for key, value in param_dict.items():
-                param_args += f", '{key}', '{value}'"
-            matlab_eval(f"add_block('{source}', '{destination}'{param_args});")
+                param_args += f", '{escape_matlab(key)}', '{escape_matlab(value)}'"
+            matlab_eval(f"add_block('{src}', '{dst}'{param_args});")
         else:
-            matlab_eval(f"add_block('{source}', '{destination}');")
+            matlab_eval(f"add_block('{src}', '{dst}');")
 
         result = f"Added block '{destination}' from '{source}'."
         if param_dict:
@@ -126,7 +132,9 @@ def connect_blocks(
             return f"Invalid dst_port ({dst_port}): must be >= 1."
 
         matlab_eval(
-            f"add_line('{model_name}', '{src_block}/{src_port}', '{dst_block}/{dst_port}', "
+            f"add_line('{escape_matlab(model_name)}', "
+            f"'{escape_matlab(src_block)}/{src_port}', "
+            f"'{escape_matlab(dst_block)}/{dst_port}', "
             f"'autorouting', 'on');"
         )
         return (
@@ -146,9 +154,9 @@ def delete_block(block_path: str) -> str:
     then the block itself is deleted.
     """
     try:
-        # Delete all lines connected to this block's ports
+        bp = escape_matlab(block_path)
         matlab_eval(
-            f"__mcp_ph = get_param('{block_path}', 'PortHandles');\n"
+            f"__mcp_ph = get_param('{bp}', 'PortHandles');\n"
             f"__mcp_allports = [__mcp_ph.Inport, __mcp_ph.Outport, "
             f"__mcp_ph.Enable, __mcp_ph.Trigger, __mcp_ph.LConn, __mcp_ph.RConn];\n"
             f"for __mcp_i = 1:length(__mcp_allports)\n"
@@ -160,8 +168,7 @@ def delete_block(block_path: str) -> str:
             f"clear __mcp_ph __mcp_allports __mcp_i __mcp_ln;"
         )
 
-        # Delete the block
-        matlab_eval(f"delete_block('{block_path}');")
+        matlab_eval(f"delete_block('{bp}');")
 
         return f"Deleted block '{block_path}' and its connected lines."
 

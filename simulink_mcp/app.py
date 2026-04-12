@@ -1,24 +1,25 @@
 """
-Simulink MCP Server - Shared application state.
+Simulink MCP Server — shared state and MATLAB engine management.
 
-This module holds the FastMCP instance and MATLAB engine manager.
-Tool modules import from here to register their tools.
+Holds the FastMCP instance, MATLAB engine lifecycle, and helpers
+that tool modules import.
 """
 
+import atexit
 import io
 import os
-import sys
 import base64
+import shutil
 import tempfile
 import logging
-from contextlib import contextmanager
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 logger = logging.getLogger("simulink-mcp")
 
 # ---------------------------------------------------------------------------
-# FastMCP instance - all tool modules register on this
+# FastMCP instance — all tool modules register on this
 # ---------------------------------------------------------------------------
 mcp = FastMCP(
     name="simulink",
@@ -32,19 +33,17 @@ mcp = FastMCP(
 # ---------------------------------------------------------------------------
 # MATLAB Engine Manager
 # ---------------------------------------------------------------------------
-_engine = None
-_engine_lock = False  # simple re-entrance guard
+_engine: Any = None
 
 
-def get_engine():
+def get_engine() -> Any:
     """Return the shared MATLAB engine, starting it if necessary."""
     global _engine
     if _engine is None:
         import matlab.engine
 
-        logger.info("Starting MATLAB engine (this takes ~15-20 s) …")
+        logger.info("Starting MATLAB engine (this takes ~15-20 s) ...")
         _engine = matlab.engine.start_matlab()
-        # Set default working directory
         workdir = os.environ.get(
             "SIMULINK_MCP_WORKDIR",
             os.path.expanduser("~"),
@@ -54,7 +53,7 @@ def get_engine():
     return _engine
 
 
-def restart_engine():
+def restart_engine() -> Any:
     """Kill and restart the MATLAB engine (recovery from crashes)."""
     global _engine
     if _engine is not None:
@@ -79,15 +78,22 @@ def engine_is_alive() -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Helper: safe eval - captures stdout/stderr, never leaks to real stdout
+# Helper: escape a string for embedding in MATLAB eval expressions
 # ---------------------------------------------------------------------------
-def matlab_eval(code: str, nargout: int = 0):
+def escape_matlab(s: str) -> str:
+    """Escape single quotes for safe interpolation into MATLAB eval strings."""
+    return s.replace("'", "''")
+
+
+# ---------------------------------------------------------------------------
+# Helper: safe eval — captures stdout/stderr, never leaks to real stdout
+# ---------------------------------------------------------------------------
+def matlab_eval(code: str, nargout: int = 0) -> tuple[Any, str, str]:
     """
     Evaluate *code* in the MATLAB engine.
 
     Returns (result, stdout_text, stderr_text).
     *result* is only meaningful when nargout > 0.
-    Raises on MATLAB errors.
     """
     eng = get_engine()
     out = io.StringIO()
@@ -100,7 +106,7 @@ def matlab_eval(code: str, nargout: int = 0):
         return result, out.getvalue(), err.getvalue()
 
 
-def matlab_feval(func: str, *args, nargout: int = 1):
+def matlab_feval(func: str, *args: Any, nargout: int = 1) -> tuple[Any, str, str]:
     """Call a named MATLAB function via feval."""
     eng = get_engine()
     out = io.StringIO()
@@ -113,6 +119,7 @@ def matlab_feval(func: str, *args, nargout: int = 1):
 # Helper: capture all open figures as PNG bytes
 # ---------------------------------------------------------------------------
 FIGURE_TEMP_DIR = tempfile.mkdtemp(prefix="simulink_mcp_figs_")
+atexit.register(lambda: shutil.rmtree(FIGURE_TEMP_DIR, ignore_errors=True))
 
 
 def capture_figures(dpi: int = 100, close_after: bool = True) -> list[tuple[bytes, str]]:
@@ -124,7 +131,6 @@ def capture_figures(dpi: int = 100, close_after: bool = True) -> list[tuple[byte
     out = io.StringIO()
     err = io.StringIO()
 
-    # Get figure handles
     eng.eval("__mcp_figs = findobj('Type','figure');", nargout=0, stdout=out, stderr=err)
     n = int(eng.eval("length(__mcp_figs);", nargout=1, stdout=io.StringIO(), stderr=io.StringIO()))
 
@@ -140,7 +146,6 @@ def capture_figures(dpi: int = 100, close_after: bool = True) -> list[tuple[byte
         with open(fname, "rb") as f:
             png_bytes = f.read()
 
-        # Get figure name/number for labeling
         fig_name = eng.eval(
             f"num2str(__mcp_figs({i}).Number);",
             nargout=1,
@@ -149,7 +154,6 @@ def capture_figures(dpi: int = 100, close_after: bool = True) -> list[tuple[byte
         )
         figures.append((png_bytes, f"Figure {fig_name}"))
 
-        # Clean up temp file
         try:
             os.remove(fname)
         except OSError:

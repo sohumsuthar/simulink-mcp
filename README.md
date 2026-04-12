@@ -1,12 +1,95 @@
+<div align="center">
+
 # simulink-mcp
 
-A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that gives AI assistants direct access to **MATLAB Simulink** - load models, inspect blocks, modify parameters, run simulations, and get figures back as images.
+**Give AI assistants direct access to MATLAB Simulink.**
 
-Unlike general-purpose MATLAB MCP servers that only execute arbitrary code, this server provides **14 dedicated Simulink tools** with structured inputs and outputs, making it far more reliable for AI-driven model interaction.
+[![License: PolyForm NC 1.0](https://img.shields.io/badge/license-PolyForm%20NC%201.0-blue)](LICENSE)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue)](https://www.python.org)
 
-## Features
+</div>
 
-| Tool | Description |
+---
+
+14 structured [MCP](https://modelcontextprotocol.io) tools for loading models, inspecting blocks, tweaking parameters, running simulations, and capturing figures as images. Every operation is a typed tool call with validated inputs — no arbitrary code execution.
+
+## Why this over a general MATLAB MCP server?
+
+General-purpose MATLAB servers pass arbitrary code strings to `eval()`. That works until the AI hallucinates a function name, forgets a semicolon, or writes a `plot()` call that blocks forever. This server exposes Simulink operations as discrete, validated tools — the AI picks the right tool and fills in typed parameters instead of generating free-text MATLAB code.
+
+## Install
+
+### 1. MATLAB Engine for Python
+
+The MATLAB Engine ships with every MATLAB installation:
+
+```bash
+cd <MATLAB_ROOT>/extern/engines/python
+pip install .
+```
+
+`<MATLAB_ROOT>` is typically:
+- **macOS:** `/Applications/MATLAB_R2024b.app`
+- **Linux:** `/usr/local/MATLAB/R2024b`
+- **Windows:** `C:\Program Files\MATLAB\R2024b`
+
+### 2. simulink-mcp
+
+```bash
+pip install simulink-mcp
+```
+
+Or from source:
+
+```bash
+git clone https://github.com/sohumsuthar/simulink-mcp.git
+cd simulink-mcp
+pip install .
+```
+
+### 3. Verify
+
+```bash
+python -c "import matlab.engine; print('OK')"
+```
+
+## Configuration
+
+### Claude Code
+
+```bash
+claude mcp add simulink -- python -m simulink_mcp
+```
+
+### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "simulink": {
+      "command": "python",
+      "args": ["-m", "simulink_mcp"],
+      "env": {
+        "SIMULINK_MCP_WORKDIR": "/path/to/your/models"
+      }
+    }
+  }
+}
+```
+
+Then ask Claude to load a model and it'll take it from there.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SIMULINK_MCP_WORKDIR` | `~` | MATLAB working directory on startup |
+
+## Tools
+
+| Tool | What it does |
 |------|-------------|
 | `load_model` | Load a `.slx` model and list top-level blocks |
 | `close_model` | Close a model (with optional save) |
@@ -20,125 +103,57 @@ Unlike general-purpose MATLAB MCP servers that only execute arbitrary code, this
 | `add_block` | Add blocks from the Simulink library |
 | `connect_blocks` | Wire block ports together with auto-routing |
 | `delete_block` | Remove a block and its connected lines |
-| `simulate` | Run a simulation and return figures as PNG images |
+| `simulate` | Run a simulation and return figures as PNG |
 | `get_simulation_data` | Extract signal data from simulation results |
-
-## Requirements
-
-- **MATLAB** with **Simulink** (tested on R2024a/R2024b)
-- **Python 3.11** (required by MATLAB Engine for Python on R2024a; check your version's compatibility)
-- **MATLAB Engine for Python** installed (`matlabengine` pip package)
-- `mcp[cli] >= 1.2.0`
-
-## Installation
-
-### 1. Install MATLAB Engine for Python
-
-```bash
-cd "C:\Program Files\MATLAB\R2024a\extern\engines\python"
-pip install .
-```
-
-Or use the bundled install script (Windows):
-
-```bash
-install.bat
-```
-
-### 2. Install Python dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Verify
-
-```bash
-python -c "import matlab.engine; print('OK')"
-```
-
-## Configuration
-
-### Claude Desktop
-
-Add to your Claude Desktop config (`claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "simulink": {
-      "command": "python",
-      "args": ["C:/path/to/simulink-mcp/server.py"],
-      "env": {
-        "SIMULINK_MCP_WORKDIR": "C:/path/to/your/models"
-      }
-    }
-  }
-}
-```
-
-### Claude Code
-
-```bash
-claude mcp add simulink python /path/to/simulink-mcp/server.py
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `SIMULINK_MCP_WORKDIR` | User home directory | MATLAB working directory on startup |
 
 ## Architecture
 
 ```
-AI Assistant  <--stdio/MCP-->  server.py  <--MATLAB Engine API-->  MATLAB + Simulink
-                                  |
-                               app.py (FastMCP instance, engine manager, helpers)
-                                  |
-                    +-------------+-------------+-------------+
-                    |             |             |             |
-              model_mgmt    inspection    modification   simulation
-              (4 tools)     (3 tools)     (5 tools)     (2 tools)
+Claude  <--stdio/MCP-->  simulink_mcp  <--Engine API-->  MATLAB + Simulink
+                              |
+                           app.py
+                              |
+                +------+------+------+---------+
+                |      |      |      |         |
+            model    inspect  modify  simulate
+            (4)      (3)      (5)     (2)
 ```
 
-Key design decisions:
+- **Lazy engine startup** — MATLAB starts on first tool call, not server launch. MCP handshake finishes in ~0.5s; MATLAB boots in the background (~15-20s).
+- **Stdout isolation** — Every MATLAB eval captures stdout/stderr to StringIO. Without this, MATLAB chatter corrupts the JSON-RPC stdio transport.
+- **Persistent session** — The engine survives across tool calls. `simulate()` stores `simOut` in the workspace so `get_simulation_data()` can pull from it later.
+- **Figure capture** — After simulation, open MATLAB figures are exported as PNG, base64-encoded, and returned inline. Figures are closed after capture to prevent accumulation.
 
-- **Lazy engine startup**: MATLAB starts on first tool call, not at server launch. This keeps MCP handshake fast (~0.5s) while MATLAB boots in the background (~15-20s).
-- **Stdout isolation**: All `matlab.engine.eval()` calls capture stdout/stderr to `StringIO` objects. This prevents MATLAB output from corrupting the JSON-RPC stdio transport.
-- **Persistent session**: The MATLAB engine persists across tool calls, so workspace variables (like `simOut`) survive between `simulate` and `get_simulation_data`.
-- **Figure capture**: After simulation, all open MATLAB figures are exported as PNG and returned as base64-encoded images that AI assistants can display inline.
+## Compatibility
 
-## Usage Examples
+| MATLAB | Python | `matlabengine` on PyPI |
+|--------|--------|------------------------|
+| R2024a | 3.9 - 3.11 | `24.1.x` |
+| R2024b | 3.9 - 3.12 | `24.2.x` |
+| R2025a | 3.9 - 3.12 | `25.1.x` |
+| R2025b | 3.9 - 3.12 | `25.2.x` |
 
-Once configured, your AI assistant can:
-
-**Load and inspect a model:**
-> "Load the model at C:/models/pid_controller.slx and show me the block structure"
-
-**Modify parameters and simulate:**
-> "Set the PID gains to P=10, I=0.5, D=2 and run a 50-second simulation"
-
-**Compare configurations:**
-> "Run the simulation with ode45, then switch to ode23s and compare the results"
-
-**Build models from scratch:**
-> "Create a new model with a step input, transfer function, and scope"
+Python 3.13 is not yet supported by any MATLAB release. The Engine API has been stable across all listed versions — no code changes needed when upgrading MATLAB.
 
 ## Troubleshooting
 
 **Server times out on startup**
-- Make sure `import matlab.engine` is NOT at the top level of any tool module. The engine import is intentionally deferred to `app.py:get_engine()`.
+`import matlab.engine` is deferred to first tool call by design. If it appears at module level, move it inside the function.
 
 **MATLAB engine crashes**
-- Call `restart_engine()` or restart the MCP server. MATLAB sessions can crash on invalid Simulink operations.
+Restart the MCP server. MATLAB sessions can die on invalid Simulink operations.
 
 **PID block "Failed to evaluate mask initialization commands"**
-- Common on R2024a when `InitialConditionForIntegrator` or `InitialConditionForFilter` is outside the saturation limits. Fix by setting both the limit and IC simultaneously:
-  ```
-  set_param('model/PID', 'LowerSaturationLimit', '0', 'InitialConditionForIntegrator', '0')
-  ```
+Common on R2024a when `InitialConditionForIntegrator` or `InitialConditionForFilter` falls outside saturation limits. Set both the limit and IC:
+```
+set_block_param("model/PID", "LowerSaturationLimit", "0")
+set_block_param("model/PID", "InitialConditionForIntegrator", "0")
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-PolyForm Noncommercial 1.0.0 - free to use, modify, and share for non-commercial purposes.
+[PolyForm Noncommercial 1.0.0](LICENSE) — free for non-commercial use.

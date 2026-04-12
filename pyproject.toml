@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "simulink-mcp"
+version = "0.1.0"
+description = "MCP server that gives AI assistants direct access to MATLAB Simulink"
+readme = "README.md"
+license = {text = "PolyForm Noncommercial 1.0.0"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Sohum Suthar"},
+]
+keywords = ["mcp", "simulink", "matlab", "ai", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Education",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "mcp[cli]>=1.2.0",
+]
+
+[project.scripts]
+simulink-mcp = "simulink_mcp:main"
+
+[project.urls]
+Repository = "https://github.com/sohumsuthar/simulink-mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["simulink_mcp"]
