@@ -157,3 +157,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE) — free for non-commercial use.
+
+## Contact
+
+[sohumsuthar.com/contact](https://sohumsuthar.com/contact)
