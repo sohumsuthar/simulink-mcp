@@ -9,7 +9,12 @@ from mcp.server.fastmcp.utilities.types import Image
 from simulink_mcp.app import mcp, matlab_eval, escape_matlab, capture_figures
 
 
-@mcp.tool()
+# structured_output=False because the return type includes
+# mcp.server.fastmcp.utilities.types.Image, which FastMCP cannot turn
+# into a pydantic output schema (Image isn't a BaseModel and has no
+# __get_pydantic_core_schema__). Without this flag, pydantic >= 2.12
+# raises PydanticSchemaGenerationError at module import time.
+@mcp.tool(structured_output=False)
 def simulate(
     model_name: str,
     stop_time: str = "",

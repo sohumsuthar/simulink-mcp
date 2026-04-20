@@ -10,3 +10,4 @@ venv/
 .env
 *.slx
 *.mdl
+.DS_Store
