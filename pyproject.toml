@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "simulink-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server that gives AI assistants direct access to MATLAB Simulink"
 readme = "README.md"
 license = {text = "PolyForm Noncommercial 1.0.0"}
