@@ -2,11 +2,17 @@
 
 import base64
 import io
+import re
 from typing import Union
 
 from mcp.server.fastmcp.utilities.types import Image
 
 from simulink_mcp.app import mcp, matlab_eval, escape_matlab, capture_figures
+
+# A valid MATLAB identifier — starts with a letter, then letters/digits/underscores.
+# Used to gate variable_name before it is interpolated as a struct field accessor
+# (escape_matlab only protects single-quoted string literals, not field names).
+_MATLAB_IDENT_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 
 
 # structured_output=False because the return type includes
@@ -129,6 +135,11 @@ def simulate(
 @mcp.tool()
 def get_simulation_data(variable_name: str, max_points: int = 1000) -> str:
     """Extract specific signal data from the last simulation run (simOut)."""
+    if not _MATLAB_IDENT_RE.match(variable_name):
+        return (
+            f"Invalid variable_name {variable_name!r}: must be a valid MATLAB "
+            f"identifier (letters, digits, underscores; starts with a letter)."
+        )
     try:
         try:
             exists, _, _ = matlab_eval("exist('simOut', 'var');", nargout=1)
