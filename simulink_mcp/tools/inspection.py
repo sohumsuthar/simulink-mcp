@@ -66,11 +66,11 @@ def get_block_params(block_path: str) -> str:
         escaped = escape_matlab(block_path)
 
         matlab_eval(
-            f"celldisp_out = fieldnames(get_param('{escaped}', 'DialogParameters'));",
+            f"__mcp_param_names = fieldnames(get_param('{escaped}', 'DialogParameters'));",
         )
 
         param_names = eng.eval(
-            "celldisp_out",
+            "__mcp_param_names",
             nargout=1,
             stdout=io.StringIO(),
             stderr=io.StringIO(),
@@ -90,7 +90,7 @@ def get_block_params(block_path: str) -> str:
             except Exception as ex:
                 lines.append(f"  {name} = <error: {ex}>")
 
-        eng.eval("clear celldisp_out;", nargout=0,
+        eng.eval("clear __mcp_param_names;", nargout=0,
                  stdout=io.StringIO(), stderr=io.StringIO())
 
         return "\n".join(lines)
