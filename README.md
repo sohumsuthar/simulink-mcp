@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/sohumsuthar/simulink-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sohumsuthar/simulink-mcp/actions/workflows/ci.yml)
 [![License: PolyForm NC 1.0](https://img.shields.io/badge/license-PolyForm%20NC%201.0-blue)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue)](https://www.python.org)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org)
 
 </div>
 
@@ -129,12 +129,12 @@ Claude  <--stdio/MCP-->  simulink_mcp  <--Engine API-->  MATLAB + Simulink
 
 | MATLAB | Python | `matlabengine` on PyPI |
 |--------|--------|------------------------|
-| R2024a | 3.9 - 3.11 | `24.1.x` |
-| R2024b | 3.9 - 3.12 | `24.2.x` |
-| R2025a | 3.9 - 3.12 | `25.1.x` |
-| R2025b | 3.9 - 3.12 | `25.2.x` |
+| R2024a | 3.10 - 3.11 | `24.1.x` |
+| R2024b | 3.10 - 3.12 | `24.2.x` |
+| R2025a | 3.10 - 3.12 | `25.1.x` |
+| R2025b | 3.10 - 3.12 | `25.2.x` |
 
-Python 3.13 is not yet supported by any MATLAB release. The Engine API has been stable across all listed versions — no code changes needed when upgrading MATLAB.
+simulink-mcp itself requires Python 3.10+ (the upstream `mcp` package dropped 3.9). Python 3.13 is not yet supported by any MATLAB release. The Engine API has been stable across all listed versions — no code changes needed when upgrading MATLAB.
 
 ## Troubleshooting
 
