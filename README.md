@@ -4,6 +4,7 @@
 
 **Give AI assistants direct access to MATLAB Simulink.**
 
+[![CI](https://github.com/sohumsuthar/simulink-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/sohumsuthar/simulink-mcp/actions/workflows/ci.yml)
 [![License: PolyForm NC 1.0](https://img.shields.io/badge/license-PolyForm%20NC%201.0-blue)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue)](https://www.python.org)
 
